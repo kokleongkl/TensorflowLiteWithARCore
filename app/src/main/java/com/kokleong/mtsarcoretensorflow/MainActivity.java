@@ -1,7 +1,9 @@
 package com.kokleong.mtsarcoretensorflow;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.ar.core.Config;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Session;
@@ -20,16 +22,17 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.media.Image;
-import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
-
-import com.google.ar.core.Anchor;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import com.google.ar.core.Frame;
-import com.google.ar.core.Pose;
 import com.google.ar.core.exceptions.NotYetAvailableException;
 import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.ux.ArFragment;
+
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -43,18 +46,21 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity {
     //ar required variables
     private ArFragment arFragment;
-    private boolean shouldAddModel = true;
     private boolean shouldTakePhoto = true;
-    private RenderHandler render;
+//    private RenderHandler render;
     //Tensorflow required variables
     private static final String MODEL_PATH = "medicine_quant.tflite";
     private static final boolean QUANT = false;
     private static final String LABEL_PATH =  "labels.txt";
     private static int INPUT_SIZE = 128;
-    final int IMAGE_MAX_SIZE = 1200000;
     private Classifier classifier;
-
     private Executor executor  =  Executors.newSingleThreadExecutor();
+
+    //UI variables
+    private BottomSheetBehavior sheetBehavior;
+    private LinearLayout bottomSheet;
+    private Button bottomButton;
+    private TextView mMedicineName;
 
 
 
@@ -66,12 +72,51 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initTensorFlowAndLoadModel();
-        render = new RenderHandler(getApplicationContext());
+        bottomButton = findViewById(R.id.bottom_btn);
+        bottomSheet = findViewById(R.id.bottom_sheet);
+        mMedicineName = findViewById(R.id.medicine_name);
+        sheetBehavior = BottomSheetBehavior.from(bottomSheet);
+
+        bottomButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                bottomSheet.setVisibility(View.GONE);
+                shouldTakePhoto=true;
+
+            }
+        });
+
+        sheetBehavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View view, int newState) {
+                switch (newState) {
+                    case BottomSheetBehavior.STATE_HIDDEN:
+                        break;
+                    case BottomSheetBehavior.STATE_EXPANDED: {
+                        bottomButton.setText("Close");
+                    }
+                    break;
+                    case BottomSheetBehavior.STATE_COLLAPSED: {
+                        bottomButton.setText("Expand");
+                    }
+                    break;
+                    case BottomSheetBehavior.STATE_DRAGGING:
+                        break;
+                    case BottomSheetBehavior.STATE_SETTLING:
+                        break;
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View view, float v) {
+
+            }
+        });
+
+
+       // render = new RenderHandler(MainActivity.this);
         arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.sceneform_fragment);
-
         arFragment.getArSceneView().getScene().addOnUpdateListener(this::onUpdateFrame);
-
-
 
     }
 
@@ -85,7 +130,6 @@ public class MainActivity extends AppCompatActivity {
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         config.setFocusMode(Config.FocusMode.AUTO);
         session.configure(config);
-        //arFragment.getArSceneView().setupSession(session);
         Frame frame = arFragment.getArSceneView().getArFrame();
 
         //if there is no frame don't process anything
@@ -148,21 +192,47 @@ public class MainActivity extends AppCompatActivity {
 
 
                         Bitmap scaledBitmap = Bitmap.createScaledBitmap(portraitBitmap, INPUT_SIZE, INPUT_SIZE, false);
-                        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
+                        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
                         outputStream.flush();
                         outputStream.close();
 
                         List<Classifier.Recognition> results = classifier.recognizeImage(scaledBitmap);
                         //change according with your model
-                        if (results.get(0).getConfidence() > 0.995 && shouldAddModel) {
-
+                        if (results.get(0).getConfidence() > 0.995) {
                             Log.i("results", results.toString());
                             for (Plane plane : frame.getUpdatedTrackables(Plane.class)) {
-                                float[] pos = {0, 0, -1};
-                                float[] rotation = {0, 0, 0, 1};
                                 if (results.get(0).getTitle().equals("Anarex")) {
-                                    Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(plane.getCenterPose());
-                                    render.placeObject(anchor, arFragment, Uri.parse("Airplane.sfb"));
+                                    shouldTakePhoto = false;
+                                    mMedicineName.setText(results.get(0).getTitle());
+                                    bottomSheet.setVisibility(View.VISIBLE);
+                                    //Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(plane.getCenterPose());
+                                    //render.placeObject(anchor, arFragment, results.get(0).getTitle());
+                                }
+                                else if(results.get(0).getTitle().equals("Charcoal")){
+                                    shouldTakePhoto = false;
+                                    mMedicineName.setText(results.get(0).getTitle());
+                                    //sheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                                    bottomSheet.setVisibility(View.VISIBLE);
+                                    //Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(plane.getCenterPose());
+                                    //render.placeObject(anchor, arFragment, results.get(0).getTitle());
+
+                                }
+                                else if(results.get(0).getTitle().equals("Dhamotil")){
+                                    shouldTakePhoto = false;
+                                    mMedicineName.setText(results.get(0).getTitle());
+                                   // sheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                                    bottomSheet.setVisibility(View.VISIBLE);
+                                    //Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(plane.getCenterPose());
+                                    //render.placeObject(anchor, arFragment, results.get(0).getTitle());
+
+                                }
+                                else if(results.get(0).getTitle().equals("Fucon")){
+                                    shouldTakePhoto = false;
+                                    mMedicineName.setText(results.get(0).getTitle());
+                                    //sheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                                    bottomSheet.setVisibility(View.VISIBLE);
+                                   // Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(plane.getCenterPose());
+                                   // render.placeObject(anchor, arFragment, results.get(0).getTitle());
                                 }
                             }
                         }
