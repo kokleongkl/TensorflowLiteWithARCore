@@ -3,7 +3,9 @@ package com.kokleong.mtsarcoretensorflow;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.ar.core.Config;
+import com.google.ar.core.Plane;
 import com.google.ar.core.Session;
+import com.google.ar.core.TrackingState;
 import com.kokleong.mtsarcoretensorflow.arcore.render.RenderHandler;
 import com.kokleong.mtsarcoretensorflow.tensorflow.lite.Classifier;
 import com.kokleong.mtsarcoretensorflow.tensorflow.lite.TensorFlowImageClassifier;
@@ -83,83 +85,97 @@ public class MainActivity extends AppCompatActivity {
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         config.setFocusMode(Config.FocusMode.AUTO);
         session.configure(config);
-        arFragment.getArSceneView().setupSession(session);
+        //arFragment.getArSceneView().setupSession(session);
         Frame frame = arFragment.getArSceneView().getArFrame();
 
-        if (shouldTakePhoto) {
-            try {
-                //take photo convert photo to Bitmap format so that it could be use in the TensorflowImageClassifierClass for detection
-                Image img = frame.acquireCameraImage();
-                byte[] nv21;
-                ContextWrapper cw = new ContextWrapper(getApplicationContext());
-                String fileName = "test.jpg";
-                File dir = cw.getDir("imageDir", Context.MODE_PRIVATE);
-                File file = new File(dir, fileName);
-                FileOutputStream outputStream;
+        //if there is no frame don't process anything
+        if(frame == null){
+            return;
+        }
+        // If Arcore is not tracking yet then don't process anything
+        if(frame.getCamera().getTrackingState() != TrackingState.TRACKING){
+            return;
+        }
+        //if ARCore is tracking get start processing
+        if(frame.getCamera().getTrackingState() ==  TrackingState.TRACKING) {
+            if (shouldTakePhoto) {
+
                 try {
+                    //take photo convert photo to Bitmap format so that it could be use in the TensorflowImageClassifierClass for detection
+                    Image img = frame.acquireCameraImage();
+                    byte[] nv21;
+                    ContextWrapper cw = new ContextWrapper(getApplicationContext());
+                    String fileName = "test.jpg";
+                    File dir = cw.getDir("imageDir", Context.MODE_PRIVATE);
+                    File file = new File(dir, fileName);
+                    FileOutputStream outputStream;
+                    try {
 
-                    outputStream = new FileOutputStream(file);
-                    ByteBuffer yBuffer = img.getPlanes()[0].getBuffer();
-                    ByteBuffer uBuffer = img.getPlanes()[1].getBuffer();
-                    ByteBuffer vBuffer = img.getPlanes()[2].getBuffer();
+                        outputStream = new FileOutputStream(file);
+                        ByteBuffer yBuffer = img.getPlanes()[0].getBuffer();
+                        ByteBuffer uBuffer = img.getPlanes()[1].getBuffer();
+                        ByteBuffer vBuffer = img.getPlanes()[2].getBuffer();
 
-                    int ySize = yBuffer.remaining();
-                    int uSize = uBuffer.remaining();
-                    int vSize = vBuffer.remaining();
+                        int ySize = yBuffer.remaining();
+                        int uSize = uBuffer.remaining();
+                        int vSize = vBuffer.remaining();
 
-                    nv21 = new byte[ySize + uSize + vSize];
+                        nv21 = new byte[ySize + uSize + vSize];
 
-                    yBuffer.get(nv21, 0, ySize);
-                    vBuffer.get(nv21, ySize, vSize);
-                    uBuffer.get(nv21, ySize + vSize, uSize);
+                        yBuffer.get(nv21, 0, ySize);
+                        vBuffer.get(nv21, ySize, vSize);
+                        uBuffer.get(nv21, ySize + vSize, uSize);
 
-                    int width = img.getWidth();
-                    int height = img.getHeight();
+                        int width = img.getWidth();
+                        int height = img.getHeight();
 
-                    img.close();
-
-
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
-                    YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21, width, height, null);
-                    yuv.compressToJpeg(new Rect(0, 0, width, height), 100, out);
-                    byte[] byteArray = out.toByteArray();
-
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length);
-                    Matrix matrix = new Matrix();
-                    matrix.postRotate(90);
-                    if (bitmap != null) {
-                        Log.i("bitmap ", "contains data");
-
-                    }
-                    Bitmap portraitBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                        img.close();
 
 
-                    Bitmap scaledBitmap = Bitmap.createScaledBitmap(portraitBitmap, INPUT_SIZE, INPUT_SIZE, false);
-                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
-                    outputStream.flush();
-                    outputStream.close();
+                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+                        YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21, width, height, null);
+                        yuv.compressToJpeg(new Rect(0, 0, width, height), 100, out);
+                        byte[] byteArray = out.toByteArray();
 
-                    List<Classifier.Recognition> results = classifier.recognizeImage(scaledBitmap);
-                    //change according with your model
-                    if (results.get(0).getConfidence() > 0.985 && shouldAddModel) {
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length);
+                        Matrix matrix = new Matrix();
+                        matrix.postRotate(90);
+                        if (bitmap != null) {
+                            Log.i("bitmap ", "contains data");
 
-                        Log.i("results", results.toString());
-
-                        float[] pos = {0, 0, -0.25f};
-                        float[] rotation = {0, 0, 0, 1};
-                        if (results.get(0).getTitle().equals("Anarex")) {
-                            Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(new Pose(pos, rotation));
-                            render.placeObject(anchor, arFragment, Uri.parse("Airplane.sfb"));
                         }
-                    }
+                        Bitmap portraitBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
 
-                } catch (Exception e) {
+
+                        Bitmap scaledBitmap = Bitmap.createScaledBitmap(portraitBitmap, INPUT_SIZE, INPUT_SIZE, false);
+                        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
+                        outputStream.flush();
+                        outputStream.close();
+
+                        List<Classifier.Recognition> results = classifier.recognizeImage(scaledBitmap);
+                        //change according with your model
+                        if (results.get(0).getConfidence() > 0.995 && shouldAddModel) {
+
+                            Log.i("results", results.toString());
+                            for (Plane plane : frame.getUpdatedTrackables(Plane.class)) {
+                                float[] pos = {0, 0, -1};
+                                float[] rotation = {0, 0, 0, 1};
+                                if (results.get(0).getTitle().equals("Anarex")) {
+                                    Anchor anchor = arFragment.getArSceneView().getSession().createAnchor(plane.getCenterPose());
+                                    render.placeObject(anchor, arFragment, Uri.parse("Airplane.sfb"));
+                                }
+                            }
+                        }
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                } catch (NotYetAvailableException e) {
                     e.printStackTrace();
                 }
-            } catch (NotYetAvailableException e) {
-                e.printStackTrace();
             }
         }
+
     }
 
     private void initTensorFlowAndLoadModel(){
