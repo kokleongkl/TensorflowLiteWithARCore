@@ -5,12 +5,14 @@ and HUD will be displayed after it dectected an object.
 
 # Machine Learning Component
 do note the model that I have trained and converted to TFLite is a custom CNN model.
-
 Will be creating another repo for the machine learning component
-
 Do open up issues when you found some thing went wrong!
 
 # Getting Started
+Clone the repo and open in the android studio.
+Build APK with gradle to run on your android device
+
+
 
 
 # References
